@@ -33,7 +33,8 @@ def query_to_atoms(query_structure, flat_ids):
     negation_mask = []
 
     for i in range(1, query_length):
-        if flat_structure[i] == 'r':
+        # latent variable id starts from 0 and decreases
+        if flat_structure[i] == 'r': # one latent node
             variable -= 1
             triples = torch.empty(batch_size, 3,
                                   device=flat_ids.device,
@@ -46,18 +47,18 @@ def query_to_atoms(query_structure, flat_ids):
             previous = variable
             conjunction_mask.append(True)
             negation_mask.append(False)
-        elif flat_structure[i] == 'e':
+        elif flat_structure[i] == 'e': # one anchor
             previous = flat_ids[:, i]
             variable += 1
-        elif flat_structure[i] == 'u':
+        elif flat_structure[i] == 'u': # overwrite conjunction mask with all False
             conjunction_mask = [False] * len(conjunction_mask)
         elif flat_structure[i] == 'n':
             negation_mask[-1] = True
 
-    atoms = torch.stack(query_triples, dim=1)
+    atoms = torch.stack(query_triples, dim=1) # (bs, num_projection, 3)
     num_variables = variable * -1
-    conjunction_mask = torch.tensor(conjunction_mask).unsqueeze(0).expand(batch_size, -1)
-    negation_mask = torch.tensor(negation_mask).unsqueeze(0).expand(batch_size, -1)
+    conjunction_mask = torch.tensor(conjunction_mask).unsqueeze(0).expand(batch_size, -1) # (bs, num_operand)
+    negation_mask = torch.tensor(negation_mask).unsqueeze(0).expand(batch_size, -1) # (bs, num_operand)
 
     return atoms, num_variables, conjunction_mask, negation_mask
 

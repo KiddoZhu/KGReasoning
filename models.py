@@ -660,18 +660,33 @@ class KGReasoning(nn.Module):
                     cur_ranking = cur_ranking - answer_list + 1 # filtered setting
                     cur_ranking = cur_ranking[masks] # only take indices that belong to the hard answers
 
-                    mrr = torch.mean(1./cur_ranking).item()
-                    h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
-                    h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
-                    h10 = torch.mean((cur_ranking <= 10).to(torch.float)).item()
+                    # mrr = torch.mean(1./cur_ranking).item()
+                    # h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
+                    # h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
+                    # h10 = torch.mean((cur_ranking <= 10).to(torch.float)).item()
+                    #
+                    # logs[query_structure].append({
+                    #     'MRR': mrr,
+                    #     'HITS1': h1,
+                    #     'HITS3': h3,
+                    #     'HITS10': h10,
+                    #     'num_hard_answer': num_hard,
+                    # })
 
-                    logs[query_structure].append({
-                        'MRR': mrr,
-                        'HITS1': h1,
-                        'HITS3': h3,
-                        'HITS10': h10,
-                        'num_hard_answer': num_hard,
-                    })
+                    # mimic KBC evaluation protocol
+                    mrr = (1 / cur_ranking).tolist()
+                    h1 = (cur_ranking <= 1).float().tolist()
+                    h3 = (cur_ranking <= 3).float().tolist()
+                    h10 = (cur_ranking <= 10).float().tolist()
+
+                    for i in range(num_hard):
+                        logs[query_structure].append({
+                            'MRR': mrr[i],
+                            'HITS1': h1[i],
+                            'HITS3': h3[i],
+                            'HITS10': h10[i],
+                            'num_hard_answer': num_hard,
+                        })
 
                 if step % args.test_log_steps == 0:
                     logging.info('Evaluating the model... (%d/%d)' % (step, total_steps))
@@ -683,6 +698,7 @@ class KGReasoning(nn.Module):
             for metric in logs[query_structure][0].keys():
                 if metric in ['num_hard_answer']:
                     continue
+                # mean by query
                 metrics[query_structure][metric] = sum([log[metric] for log in logs[query_structure]])/len(logs[query_structure])
             metrics[query_structure]['num_queries'] = len(logs[query_structure])
 

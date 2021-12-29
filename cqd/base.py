@@ -84,6 +84,7 @@ class CQD(nn.Module):
     def loss(self,
              triples: Tensor) -> Tensor:
         (scores_o, scores_s), factors = self.score_candidates(triples)
+        # cross entropy
         l_fit = self.loss_fn(scores_o, triples[:, 2]) + self.loss_fn(scores_s, triples[:, 0])
         l_reg = self.regularizer.forward(factors)
         return l_fit + l_reg
@@ -94,12 +95,16 @@ class CQD(nn.Module):
         rel_emb = self.embeddings[1](triples[:, 1])
         rhs_emb = self.embeddings[0](triples[:, 2])
         to_score = self.embeddings[0].weight
+        # (h, r, *)
         scores_o, _ = self.score_o(lhs_emb, rel_emb, to_score)
+        # (*, r, t)
         scores_s, _ = self.score_s(to_score, rel_emb, rhs_emb)
         lhs, rel, rhs = self.split(lhs_emb, rel_emb, rhs_emb)
         factors = self.get_factors(lhs, rel, rhs)
         return (scores_o, scores_s), factors
 
+    # score_o and score_s are mathematically equivalent
+    # They only compute from the different direction and have different memory consumption
     def score_o(self,
                 lhs_emb: Tensor,
                 rel_emb: Tensor,
@@ -122,6 +127,7 @@ class CQD(nn.Module):
         factors = self.get_factors(lhs, rel, rhs) if return_factors else None
         return score_1 + score_2, factors
 
+    # get the norm of each complex scalar
     def get_factors(self,
                     lhs: Tuple[Tensor, Tensor],
                     rel: Tuple[Tensor, Tensor],
@@ -165,18 +171,23 @@ class CQD(nn.Module):
     def reduce_query_score(self, atom_scores, conjunction_mask, negation_mask):
         batch_size, num_atoms, *extra_dims = atom_scores.shape
 
+        # CQD-CO always use sigmoid
         atom_scores = torch.sigmoid(atom_scores)
         scores = atom_scores.clone()
+        # apply negation
         scores[negation_mask] = 1 - atom_scores[negation_mask]
 
         disjunctions = scores[~conjunction_mask].reshape(batch_size, -1, *extra_dims)
         conjunctions = scores[conjunction_mask].reshape(batch_size, -1, *extra_dims)
 
+        # apply disjunction
         if disjunctions.shape[1] > 0:
             disjunctions = self.batch_t_conorm(disjunctions)
 
         conjunctions = torch.cat([disjunctions, conjunctions], dim=1)
 
+        # this is a non-op if it is a disjunctive query (since there is no conjunction in a disjunctive query)
+        # it applies to 1 single variable in a disjunctive query
         t_norm = self.batch_t_norm(conjunctions)
         return t_norm
 
@@ -192,12 +203,14 @@ class CQD(nn.Module):
         scores = None
 
         for query_structure, queries in batch_queries_dict.items():
+            # process one query structure at a time
             batch_size = queries.shape[0]
             atoms, num_variables, conjunction_mask, negation_mask = query_to_atoms(query_structure, queries)
 
             all_idxs.extend(batch_idxs_dict[query_structure])
 
             # [False, True]
+            # select atoms involving the last entity (the output one)
             target_mask = torch.sum(atoms == -num_variables, dim=-1) > 0
 
             # Offsets identify variables across different batches
@@ -248,6 +261,7 @@ class CQD(nn.Module):
                                                               conjunction_mask,
                                                               negation_mask)
 
+                        # use l3 regularization here
                         loss = - query_score.mean() + self.regularizer.forward(factors)
                         loss_value = loss.item()
 
@@ -257,6 +271,7 @@ class CQD(nn.Module):
                         i += 1
 
                 with torch.no_grad():
+                    # apply discrete selection to the last entity
                     # Select predicates involving target variable only
                     conjunction_mask = conjunction_mask[target_mask].reshape(batch_size, -1)
                     negation_mask = negation_mask[target_mask].reshape(batch_size, -1)
@@ -298,10 +313,10 @@ class CQD(nn.Module):
 
                 def scoring_function(rel_: Tensor, lhs_: Tensor, rhs_: Tensor) -> Tensor:
                     res, _ = self.score_o(lhs_, rel_, rhs_)
-                    if self.do_sigmoid is True:
+                    if self.do_sigmoid is True: # not used
                         res = torch.sigmoid(res)
-                    if self.do_normalize is True:
-                        res = normalize(res)
+                    if self.do_normalize is True: # used for 2u
+                        res = normalize(res) # linearly rescale everything into 0 and 1
                     return res
 
                 if graph_type == "1p":

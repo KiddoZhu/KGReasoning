@@ -22,6 +22,8 @@ class CQDTrainDataset(Dataset):
         self.answer = answer
 
         self.qa_lst = []
+        # the positive data distribution is different from 1p only in BetaE's implementation
+        # here it favors queries with more answers
         for q, qs in queries:
             for a in self.answer[q]:
                 qa_entry = (qs, q, a)
@@ -41,10 +43,12 @@ class CQDTrainDataset(Dataset):
         query_structure = self.qa_lst[idx][0]
 
         # tail = np.random.choice(list(self.answer[query]))
+        # only 1 positive sample at a time
         tail = self.qa_lst[idx][2]
 
         # subsampling_weight = self.count[query]
         # subsampling_weight = torch.sqrt(1 / torch.Tensor([subsampling_weight]))
+        # no subsampling weight
         subsampling_weight = torch.tensor([1.0])
 
         negative_sample_list = []

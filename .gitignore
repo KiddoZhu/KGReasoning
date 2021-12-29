@@ -7,3 +7,5 @@ data/
 *.pdf
 *.eps
 submission/
+
+.idea/

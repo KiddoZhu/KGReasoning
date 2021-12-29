@@ -90,7 +90,7 @@ def parse_args(args=None):
     parser.add_argument('--use-qa-iterator', action='store_true', default=False)
     
     parser.add_argument('--tasks', default='1p.2p.3p.2i.3i.ip.pi.2in.3in.inp.pin.pni.2u.up', type=str, help="tasks connected by dot, refer to the BetaE paper for detailed meaning and structure of each task")
-    parser.add_argument('--seed', default=0, type=int, help="random seed")
+    parser.add_argument('--seed', default=0, type=int, help="random  seed")
     parser.add_argument('-betam', '--beta_mode', default="(1600,2)", type=str, help='(hidden_dim,num_layer) for BetaE relational projection')
     parser.add_argument('-boxm', '--box_mode', default="(none,0.02)", type=str, help='(offset activation,center_reg) for Query2box, center_reg balances the in_box dist and out_box dist')
     parser.add_argument('--prefix', default=None, type=str, help='prefix of the log path')
@@ -171,6 +171,7 @@ def evaluate(model, tp_answers, fn_answers, args, dataloader, query_name_dict, m
         num_query_structures += 1
 
     for metric in average_metrics:
+        # mean by query structures
         average_metrics[metric] /= num_query_structures
         writer.add_scalar("_".join([mode, 'average', metric]), average_metrics[metric], step)
         all_metrics["_".join(["average", metric])] = average_metrics[metric]
@@ -267,11 +268,12 @@ def main(args):
     logging.info('#entity: %d' % nentity)
     logging.info('#relation: %d' % nrelation)
     logging.info('#max steps: %d' % args.max_steps)
-    logging.info('Evaluate unoins using: %s' % args.evaluate_union)
+    logging.info('Evaluate unions using: %s' % args.evaluate_union)
 
     train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries, test_hard_answers, test_easy_answers = load_data(args, tasks)        
 
     logging.info("Training info:")
+    # CQD doesn't need training?
     if args.do_train:
         for query_structure in train_queries:
             logging.info(query_name_dict[query_structure]+": "+str(len(train_queries[query_structure])))
@@ -407,7 +409,7 @@ def main(args):
             warm_up_steps = checkpoint['warm_up_steps']
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     else:
-        logging.info('Ramdomly Initializing %s Model...' % args.geo)
+        logging.info('Randomly Initializing %s Model...' % args.geo)
         init_step = 0
 
     step = init_step 
